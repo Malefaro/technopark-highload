@@ -23,13 +23,14 @@ class Response:
     }
     allowed_methods = ["GET", "HEAD"]
 
-    def __init__(self, status=200, content_length=None, connection="close", filename=".html"):
+    def __init__(self, status=200, content_length=None, connection="close", filename=".html", data="Hello there"):
         self._status = status
         self._date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
         self._content_length = content_length
         self._connection = connection
         self._filename = filename
         self._content_type = self.content_types['.html']
+        self._data = data
         if status == 200:
             f = self._filename
             i = f.rfind(".")
@@ -47,6 +48,7 @@ class Response:
         if self._status == 200:
             response_tmpl += 'Content-Length: {length}{ENDL}' \
                              'Content-Type: {type}{ENDL}{ENDL}'
+        response_tmpl += self._data
         return response_tmpl
 
     @property
@@ -54,7 +56,7 @@ class Response:
         if self._status not in self.codes:
             return None
         tmpl = self._response_tml()
-        print(self.__dict__)
+        # print(self.__dict__)
         return tmpl.format(status=self._status, server=self.server,
                            date=self._date, length=self._content_length,
                            type=self._content_type, ENDL=self.ENDL).encode("utf-8")

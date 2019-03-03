@@ -34,6 +34,7 @@ class Loop:
                 print(f'task is {task}')
                 next(task)
             except StopIteration:
+                print(f'task complete {task}')
                 self._tasks.remove(task)
 
     def run(self):
@@ -55,10 +56,12 @@ class Server:
     @coro
     def write_answer(self, con, req: Request):
         i = 0
-        step = 8
+        step = 1024
         resp = Response(status=200, )
         while i < len(resp.data):
-            con.send(resp.data[i:])
+            tosend = resp.data[i:i+step]
+            print(f'to send: {tosend}')
+            con.send(tosend)
             i+=step
             yield
         con.close()
@@ -67,20 +70,20 @@ class Server:
 
 
     @coro
-    def add_connection(self, server: socket.socket, epoll=None, write=None, inputs=None):
+    def add_connection(self, server: socket.socket, epoll=None):
         con, _ = server.accept()
         con.setblocking(0)
-        inputs.append(con)
+        # inputs.append(con)
         print(f'add conn {con}')
         # write.append(con)
-        #epoll.register(con.fileno(), select.EPOLLIN)
+        epoll.register(con.fileno(), select.EPOLLIN)
         while True:
             data = b''
             msg = b''
             try:
-                print("BEFORE DATA", con)
-                data = con.recv(32)
-                print(f"DATA {data}")
+                #print("BEFORE DATA", con)
+                data = con.recv(1024)
+                #print(f"DATA {data}")
             except ConnectionResetError:
                 print("Closed!")
                 con.close()
@@ -98,45 +101,45 @@ class Server:
 
     @coro
     def start(self):
-        # server = socket.socket(*self._socket_opts)
-        # epoll = select.epoll()
-        # epoll.register(server.fileno(), select.EPOLLIN)
-        # server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        # server.bind((self._host, self._port))
-        # server.listen(5)
-        # server.setblocking(0)
-        # server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        # server_fd = server.fileno()
-
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server = socket.socket(*self._socket_opts)
+        epoll = select.epoll()
+        epoll.register(server.fileno(), select.EPOLLIN)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.setblocking(0)
-
-        # Биндим сервер на нужный адрес и порт
         server.bind((self._host, self._port))
-
-        # Установка максимального количество подключений
         server.listen(5)
-        INPUTS = []
-        INPUTS.append(server)
-        OUTPUTS=[]
+        server.setblocking(0)
+        server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        server_fd = server.fileno()
+
+        # server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # server.setblocking(0)
+        #
+        # # Биндим сервер на нужный адрес и порт
+        # server.bind((self._host, self._port))
+        #
+        # # Установка максимального количество подключений
+        # server.listen(5)
+        # INPUTS = []
+        # INPUTS.append(server)
+        # OUTPUTS=[]
         print("starting server at {}:{}".format(self._host, self._port))
         try:
             while True:
-                # events = epoll.poll(1)
-                # for fileno, event in events:
-                #     if fileno == server_fd:
-                #         print("WE HERE")
-                #         self._loop.create_task(self.add_connection(server, epoll))
-                #     elif event & select.EPOLLIN:
-                #         pass
-                #     elif event & select.EPOLLOUT:
-                #         pass
-                readables, writable, _ = select.select(INPUTS, OUTPUTS, INPUTS, 1)
-                for input in readables:
-                    if input is server:
-                        print("creating task", input)
-                        self._loop.create_task(self.add_connection(input, write=writable, inputs=INPUTS))
+                events = epoll.poll(0)
+                for fileno, event in events:
+                    if fileno == server_fd:
+                        print("WE HERE")
+                        self._loop.create_task(self.add_connection(server, epoll))
+                    elif event & select.EPOLLIN:
+                        pass
+                    elif event & select.EPOLLOUT:
+                        pass
+                # readables, writable, _ = select.select(INPUTS, OUTPUTS, INPUTS, 1)
+                # for input in readables:
+                #     if input is server:
+                #         print("creating task", input)
+                #         self._loop.create_task(self.add_connection(input, write=writable, inputs=INPUTS))
                 # for w in writable:
                 #     r = Response()
                 #     w.send(r.data)
