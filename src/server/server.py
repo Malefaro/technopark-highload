@@ -4,7 +4,7 @@ from response.response import Response
 from request.request import Request
 from pathlib import Path
 from os.path import getsize, abspath
-
+import os
 # class coro:
 #     def __init__(self, func):
 #         self._callable = func
@@ -48,7 +48,7 @@ class Loop:
             self._step()
 
 
-STEP = 1024
+STEP = 8
 
 class Server:
     def __init__(self, loop, host='0.0.0.0', port=3000,
@@ -63,12 +63,13 @@ class Server:
 
     @coro
     def _read_file(self, filename):
-        with open(filename, 'r') as f:
-            chunk = f.read(STEP)
-            yield chunk
-            while chunk:
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
                 chunk = f.read(STEP)
                 yield chunk
+                while chunk:
+                    chunk = f.read(STEP)
+                    yield chunk
         raise StopIteration
 
     @coro
@@ -80,6 +81,8 @@ class Server:
             try:
                 chunk = next(rf)
             except StopIteration:
+                break
+            except FileNotFoundError:
                 break
             con.send(chunk)
             yield
@@ -119,30 +122,43 @@ class Server:
 
 
     @coro
-    def add_connection(self, server: socket.socket, epoll):
-        con, _ = server.accept()
-        con.setblocking(0)
-        print(f'add conn {con}')
-        epoll.register(con.fileno(), select.EPOLLIN)
+    def add_connection(self, new_con):# server: socket.socket, epoll):
+        # con, _ = server.accept()
+        # con.setblocking(0)
+        # print(f'add conn {con}')
+        # epoll.register(con.fileno(), select.EPOLLIN)
+        con = new_con
+        print(f"add new conn {con}")
+        yield
+        print(f"afet yield {con}")
+        msg = b''
         while True:
             data = b''
-            msg = b''
             try:
-                #print("BEFORE DATA", con)
-                data = con.recv(STEP)
-                #print(f"DATA {data}")
+                print("BEFORE DATA", con)
+                try:
+                    data = con.recv(STEP)
+                except socket.error as e:
+                    print(f'catch error in add_connection {e}')
+                    yield
+                    continue
+                print(f"DATA {data}")
             except ConnectionResetError:
                 print("Closed!")
                 con.close()
                 raise StopIteration
             except Exception as e:
                 print("EXCEPTION:", e)
-            if data:
+            #print(f'data {data}, strip data {data.strip()}')
+            if data.strip():
+                #print(f'add data: {data}')
                 msg += data
                 yield
             else:
                 print("STOP ITER")
                 req = Request(msg.decode('utf-8'))
+                print(msg)
+                print(req)
                 self._loop.create_task(self.write_answer(con, req))
                 raise StopIteration
 
@@ -161,11 +177,17 @@ class Server:
         try:
             while True:
                 events = epoll.poll(0.1)
+                print(f"some events : {events}")
                 for fileno, event in events:
                     if fileno == server_fd:
-                        self._loop.create_task(self.add_connection(server, epoll))
+                        print(f'i am catch first event {event}')
+                        con, _ = server.accept()
+                        con.setblocking(0)
+                        epoll.register(con.fileno(), select.EPOLLIN)
+                        self._loop.create_task(self.add_connection(con))
+                        print(f'After adding task')
                     elif event & select.EPOLLIN:
-                        pass
+                        print(f'I am catch event {event}')
                     elif event & select.EPOLLOUT:
                         pass
                 yield
