@@ -16,3 +16,6 @@ loop = Loop()
 server = Server(loop=loop, static_dir='/var/www/html')
 loop.create_task(server.start())
 loop.run()
+
+# server = Server(loop=loop, static_dir='/var/www/html')
+# server.start()

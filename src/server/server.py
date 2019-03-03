@@ -5,6 +5,8 @@ from request.request import Request
 from pathlib import Path
 from os.path import getsize, abspath
 import os
+
+
 # class coro:
 #     def __init__(self, func):
 #         self._callable = func
@@ -50,6 +52,7 @@ class Loop:
 
 STEP = 8
 
+
 class Server:
     def __init__(self, loop, host='0.0.0.0', port=3000,
                  socket_opts=[socket.AF_INET, socket.SOCK_STREAM],
@@ -60,34 +63,20 @@ class Server:
         self._socket_opts = socket_opts
         self._loop: Loop = loop
         self._allowed_methods = allowed_methods
+        self._tasks = {}
 
     @coro
     def _read_file(self, filename):
         if os.path.exists(filename):
-            with open(filename, 'r') as f:
+            with open(filename, 'rb') as f:
                 chunk = f.read(STEP)
                 yield chunk
                 while chunk:
                     chunk = f.read(STEP)
+                    print(f"read_file chunk {chunk}, type: {type(chunk)}")
                     yield chunk
         raise StopIteration
 
-    @coro
-    def write_answer(self, con, req: Request):
-        resp = self._handle_request(req)
-        con.send(resp.header)
-        rf = self._read_file(resp.filename)
-        while True:
-            try:
-                chunk = next(rf)
-            except StopIteration:
-                break
-            except FileNotFoundError:
-                break
-            con.send(chunk)
-            yield
-        con.close()
-        raise StopIteration
 
     def _handle_request(self, req: Request):
         uri = req.uri
@@ -118,49 +107,48 @@ class Server:
             status = 403
         return Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)
 
-
-
-
     @coro
-    def add_connection(self, new_con):# server: socket.socket, epoll):
-        # con, _ = server.accept()
-        # con.setblocking(0)
-        # print(f'add conn {con}')
-        # epoll.register(con.fileno(), select.EPOLLIN)
+    def read_request(self, new_con, epoll):
         con = new_con
-        print(f"add new conn {con}")
-        yield
-        print(f"afet yield {con}")
         msg = b''
+        yield
         while True:
             data = b''
             try:
-                print("BEFORE DATA", con)
-                try:
-                    data = con.recv(STEP)
-                except socket.error as e:
-                    print(f'catch error in add_connection {e}')
-                    yield
-                    continue
-                print(f"DATA {data}")
+                data = con.recv(STEP)
             except ConnectionResetError:
-                print("Closed!")
                 con.close()
                 raise StopIteration
-            except Exception as e:
-                print("EXCEPTION:", e)
-            #print(f'data {data}, strip data {data.strip()}')
+            except socket.error:
+                pass
             if data.strip():
-                #print(f'add data: {data}')
                 msg += data
-                yield
             else:
-                print("STOP ITER")
                 req = Request(msg.decode('utf-8'))
-                print(msg)
-                print(req)
-                self._loop.create_task(self.write_answer(con, req))
+                print(f"msg: {msg}\nreq: {req}")
+                epoll.modify(con.fileno(), select.EPOLLOUT)
+                new_task = self.send_response(con, epoll, req)
+                self._tasks[con.fileno()] = new_task
                 raise StopIteration
+
+    @coro
+    def send_response(self, new_con, epoll, req: Request):
+        con = new_con
+        resp = self._handle_request(req)
+        con.send(resp.header)
+        rf = self._read_file(resp.filename)
+        while True:
+            try:
+                chunk = next(rf)
+            except StopIteration:
+                break
+            except FileNotFoundError:
+                break
+            con.send(chunk)
+            yield
+        epoll.unregister(con.fileno())
+        con.close()
+        raise StopIteration
 
     @coro
     def start(self):
@@ -180,25 +168,32 @@ class Server:
                 print(f"some events : {events}")
                 for fileno, event in events:
                     if fileno == server_fd:
-                        print(f'i am catch first event {event}')
                         con, _ = server.accept()
                         con.setblocking(0)
                         epoll.register(con.fileno(), select.EPOLLIN)
-                        self._loop.create_task(self.add_connection(con))
-                        print(f'After adding task')
+                        # task = self.add_connection(con)
+                        task = self.read_request(con, epoll)
+                        # self._loop.create_task(task)
+                        self._tasks[con.fileno()] = task
                     elif event & select.EPOLLIN:
-                        print(f'I am catch event {event}')
+                        try:
+                            next(self._tasks[fileno])
+                        except StopIteration:
+                            pass
                     elif event & select.EPOLLOUT:
-                        pass
+                        try:
+                            next(self._tasks[fileno])
+                        except StopIteration:
+                            pass
                 yield
         except KeyboardInterrupt:
             print("server stop")
-        except Exception as e:
-            print(f'SOME EXCEPTION {e}', e)
+        # except Exception as e:
+        #     print(f'SOME EXCEPTION {e}', e)
         finally:
-            server.close()
             epoll.unregister(server.fileno())
             epoll.close()
+            server.close()
 
     def stop(self):
         pass
