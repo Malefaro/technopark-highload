@@ -8,11 +8,11 @@ def f(a, b, name):
         yield (a, b)
 
 
-c1 = f(1, 2, "c1")
-c2 = f(3, 4, "c2")
 loop = Loop()
-loop.create_task(c1)
-loop.create_task(c2)
+# c1 = f(1, 2, "c1")
+# c2 = f(3, 4, "c2")
+# loop.create_task(c1)
+# loop.create_task(c2)
 server = Server(loop=loop)
 loop.create_task(server.start())
 loop.run()

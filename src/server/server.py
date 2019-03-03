@@ -31,6 +31,7 @@ class Loop:
     def _step(self):
         for task in self._tasks:
             try:
+                print(f'task is {task}')
                 next(task)
             except StopIteration:
                 self._tasks.remove(task)
@@ -49,35 +50,50 @@ class Server:
         self._socket_opts = socket_opts
         self._loop: Loop = loop
 
+
+
     @coro
     def write_answer(self, con, req: Request):
+        i = 0
+        step = 8
         resp = Response(status=200, )
-        con.send(resp.data)
+        while i < len(resp.data):
+            con.send(resp.data[i:])
+            i+=step
+            yield
         con.close()
         raise StopIteration
 
+
+
     @coro
-    def add_connection(self, server: socket.socket, epoll=None, write=None):
+    def add_connection(self, server: socket.socket, epoll=None, write=None, inputs=None):
         con, _ = server.accept()
         con.setblocking(0)
-        write.append(con)
+        inputs.append(con)
+        print(f'add conn {con}')
+        # write.append(con)
         #epoll.register(con.fileno(), select.EPOLLIN)
         while True:
             data = b''
             msg = b''
             try:
                 print("BEFORE DATA", con)
-                data = con.recv(1024)
+                data = con.recv(32)
                 print(f"DATA {data}")
             except ConnectionResetError:
+                print("Closed!")
                 con.close()
                 raise StopIteration
+            except Exception as e:
+                print("EXCEPTION:", e)
             if data:
                 msg += data
                 yield
             else:
+                print("STOP ITER")
                 req = Request(msg.decode('utf-8'))
-                self._loop.create_task(self.write_answer(con, req))  # TODO: add to task
+                self._loop.create_task(self.write_answer(con, req))
                 raise StopIteration
 
     @coro
@@ -117,15 +133,13 @@ class Server:
                 #     elif event & select.EPOLLOUT:
                 #         pass
                 readables, writable, _ = select.select(INPUTS, OUTPUTS, INPUTS, 1)
-                print(readables)
-                print(INPUTS)
                 for input in readables:
                     if input is server:
-                        self._loop.create_task(self.add_connection(server, write=writable))
-                for w in writable:
-                    print("WRITEBBLE", w)
-                    r = Response
-                    w.send(r.data)
+                        print("creating task", input)
+                        self._loop.create_task(self.add_connection(input, write=writable, inputs=INPUTS))
+                # for w in writable:
+                #     r = Response()
+                #     w.send(r.data)
                 yield
         except KeyboardInterrupt:
             print("server stop")
