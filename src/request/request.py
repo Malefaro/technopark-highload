@@ -43,7 +43,7 @@ class Request:
 
 
 if __name__ == "__main__":
-    testdata = '''GET /local '''
+    testdata = '''GET /Dockerfile'''
     r = Request(testdata)
     print(r)
     print(r.method)

@@ -20,23 +20,27 @@ class Response:
         '.gif': 'image/gif',
         '.swf': 'application/x-shockwave-flash',
         '.txt': 'text/txt',
+        'default': 'text/plain'
     }
     allowed_methods = ["GET", "HEAD"]
 
-    def __init__(self, status=200, content_length=None, connection="close", filename=".html", data="Hello there"):
+    def __init__(self, status=200, content_length=None, connection="close", f_type=".html", data=b"Hello there", filename=""):
         self._status = status
         self._date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
         self._content_length = content_length
         self._connection = connection
-        self._filename = filename
-        self._content_type = self.content_types['.html']
+        self.filename = filename
+        try:
+            self._content_type = self.content_types[f_type]
+        except KeyError:
+            self._content_type = self.content_types['default']
         self._data = data
-        if status == 200:
-            f = self._filename
-            i = f.rfind(".")
-            if i != -1:
-                file_type = f[i:]
-                self._content_type = self.content_types[file_type]
+        # if status == 200:
+        #     f = self._filename
+        #     i = f.rfind(".")
+        #     if i != -1:
+        #         file_type = f[i:]
+        #         self._content_type = self.content_types[file_type]
 
     def __str__(self):
         return str(self.__dict__)
@@ -48,11 +52,17 @@ class Response:
         if self._status == 200:
             response_tmpl += 'Content-Length: {length}{ENDL}' \
                              'Content-Type: {type}{ENDL}{ENDL}'
-        response_tmpl += self._data
+        # response_tmpl += self._data.decode('utf-8')
         return response_tmpl
 
+    def write_data(self, data):
+        if isinstance(data, bytes):
+            self._date += data
+        elif isinstance(data, str):
+            self._data += data.encode('utf-8')
+
     @property
-    def data(self):
+    def header(self):
         if self._status not in self.codes:
             return None
         tmpl = self._response_tml()
@@ -63,4 +73,4 @@ class Response:
 
 
 if __name__ == "__main__":
-    print(Response(status=200, filename="js.js").data)
+    print(Response(status=200, filename="js.js").header)
