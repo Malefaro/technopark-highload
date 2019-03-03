@@ -2,7 +2,7 @@ import socket
 import select
 from response.response import Response
 from request.request import Request
-
+import errno
 # class coro:
 #     def __init__(self, func):
 #         self._callable = func
@@ -45,7 +45,7 @@ class Loop:
 
 
 class Server:
-    def __init__(self, loop, host='localhost', port=3000, socket_opts=[socket.AF_INET, socket.SOCK_STREAM]):
+    def __init__(self, loop, host='0.0.0.0', port=3000, socket_opts=[socket.AF_INET, socket.SOCK_STREAM]):
         self._host = host
         self._port = port
         self._socket_opts = socket_opts
@@ -82,14 +82,19 @@ class Server:
             msg = b''
             try:
                 #print("BEFORE DATA", con)
-                data = con.recv(1024)
+                try:
+                    data = con.recv(1024)
+                except BlockingIOError as e:
+                    if e.errno == errno.EWOULDBLOCK:
+                        print("YES FUCING YES", e)
+                        continue
                 #print(f"DATA {data}")
             except ConnectionResetError:
                 print("Closed!")
                 con.close()
                 raise StopIteration
-            except Exception as e:
-                print("EXCEPTION:", e)
+            # except Exception as e:
+            #     print("EXCEPTION:", e)
             if data:
                 msg += data
                 yield
@@ -103,12 +108,15 @@ class Server:
     def start(self):
         server = socket.socket(*self._socket_opts)
         epoll = select.epoll()
-        epoll.register(server.fileno(), select.EPOLLIN)
+        epoll.register(server.fileno(), select.EPOLLIN | select.EPOLLET)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((self._host, self._port))
         server.listen(5)
+        # print('wait conn')
+        # con, _ = server.accept()
+        # print("CON IS: " , con)
         server.setblocking(0)
-        server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        # server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         server_fd = server.fileno()
 
         # server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -126,7 +134,7 @@ class Server:
         print("starting server at {}:{}".format(self._host, self._port))
         try:
             while True:
-                events = epoll.poll(0)
+                events = epoll.poll(1)
                 for fileno, event in events:
                     if fileno == server_fd:
                         print("WE HERE")
