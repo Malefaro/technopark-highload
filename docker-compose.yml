@@ -6,8 +6,9 @@ services:
       context: ./
       dockerfile: Dockerfile
     volumes:
-      - .:/var/www/html
+      - ../http-test-suite:/var/www/html
+      - ./httpd.conf:/etc/httpd.conf
     expose:
-      - "3000"
+      - "80"
     ports:
-    - "3000:3000"
+    - "80:80"

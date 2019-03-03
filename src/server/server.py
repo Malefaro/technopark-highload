@@ -35,7 +35,7 @@ class Loop:
     def _step(self):
         for task in self._tasks:
             try:
-                print(f'task is {task}')
+                #print(f'task is {task}')
                 next(task)
             except StopIteration:
                 print(f'task complete {task}')
@@ -50,7 +50,7 @@ class Loop:
             self._step()
 
 
-STEP = 8
+STEP = 1024
 
 
 class Server:
@@ -69,12 +69,13 @@ class Server:
     def _read_file(self, filename):
         if os.path.exists(filename):
             with open(filename, 'rb') as f:
+                yield
                 chunk = f.read(STEP)
                 yield chunk
                 while chunk:
                     chunk = f.read(STEP)
-                    print(f"read_file chunk {chunk}, type: {type(chunk)}")
                     yield chunk
+        print(f"IN READ FILE {filename}")
         raise StopIteration
 
 
@@ -93,11 +94,13 @@ class Server:
         if req.method not in self._allowed_methods:
             status = 405
         i = filepath.rfind(".")
+
         if i != -1:
             file_type = filepath[i:]
         else:
             file_type = 'default'
         file_size = 0
+        print(f"FILE TYPE {file_type}")
         try:
             file_size = getsize(filepath)
             status = 200
@@ -110,6 +113,7 @@ class Server:
     @coro
     def read_request(self, new_con, epoll):
         con = new_con
+        print(f'creating new con {con}')
         msg = b''
         yield
         while True:
@@ -125,7 +129,7 @@ class Server:
                 msg += data
             else:
                 req = Request(msg.decode('utf-8'))
-                print(f"msg: {msg}\nreq: {req}")
+                print(f"msg: {msg} in con: {con.fileno()}\nreq: {req}")
                 epoll.modify(con.fileno(), select.EPOLLOUT)
                 new_task = self.send_response(con, epoll, req)
                 self._tasks[con.fileno()] = new_task
@@ -134,8 +138,17 @@ class Server:
     @coro
     def send_response(self, new_con, epoll, req: Request):
         con = new_con
+        if not req.is_valid:
+            epoll.unregister(con.fileno())
+            con.close()
+            raise StopIteration
         resp = self._handle_request(req)
         con.send(resp.header)
+        print(f"send resp: {resp.filename}")
+        if resp._status != 200:
+            epoll.unregister(con.fileno())
+            con.close()
+            raise StopIteration
         rf = self._read_file(resp.filename)
         while True:
             try:
@@ -144,7 +157,11 @@ class Server:
                 break
             except FileNotFoundError:
                 break
-            con.send(chunk)
+            print(f'sending {chunk} [{con.fileno()}]')
+            try:
+                con.send(chunk)
+            except BrokenPipeError:
+                break
             yield
         epoll.unregister(con.fileno())
         con.close()
@@ -165,7 +182,7 @@ class Server:
         try:
             while True:
                 events = epoll.poll(0.1)
-                print(f"some events : {events}")
+                # print(f"some events : {events}")
                 for fileno, event in events:
                     if fileno == server_fd:
                         con, _ = server.accept()
