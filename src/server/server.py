@@ -106,6 +106,8 @@ class Server:
             status = 200
         except FileNotFoundError:
             status = 404
+            if filepath.split('/')[-1] == "index.html":
+                status = 403
         if self._static_dir not in abspath(filepath):
             status = 403
         return Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)
