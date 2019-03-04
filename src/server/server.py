@@ -118,6 +118,7 @@ class Server:
             status = 403
         if method not in self._allowed_methods:
             status = 405
+        print(f'check response {Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)}')
         return Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)
 
     @coro
@@ -156,20 +157,22 @@ class Server:
         print(f'req {req}')
         print(f"send resp: {resp.header} [{resp.filename}]")
         con.send(resp.header)
-        if resp._status != 200:
+        if resp._status != resp.codes[200]:
             epoll.unregister(con.fileno())
             con.close()
             raise StopIteration
         rf = self._read_file(resp.filename)
         while True:
             try:
-                chunk = next(rf)
+                chunk: bytes = next(rf)
                 if req.method == "HEAD":
-                    print("WTF")
-                    if b'<body>' in chunk:
-                        chunk = chunk.split(b'<body>')[0] + b'\r\n\r\n'
-                        print(f'SLPIT CHUNCK >>>> {chunk}')
-                        rf.close()
+                    if b'<head>' not in chunk or b'</head>' not in chunk:
+                        yield
+                        continue
+                    if b'<head>' in chunk:
+                        chunk = chunk[chunk.find(b'<head>'):]
+                    elif b'</head>' in chunk:
+                        chunk = chunk[:chunk.find(b'</head>')]
             except StopIteration:
                 break
             except FileNotFoundError:

@@ -25,7 +25,7 @@ class Response:
     allowed_methods = ["GET", "HEAD"]
 
     def __init__(self, status=200, content_length=None, connection="close", f_type=".html", data=b"Hello there", filename=""):
-        self._status = status
+        self._status = self.codes[200] if status not in self.codes.keys() else self.codes[status]
         self._date = datetime.now().strftime('%a, %d %b %Y %H:%M:%S GMT')
         self._content_length = content_length
         self._connection = connection
@@ -49,7 +49,7 @@ class Response:
         response_tmpl = 'HTTP/1.1 {status}{ENDL}' \
                         'Server: {server}{ENDL}' \
                         'Date: {date}{ENDL}'
-        if self._status == 200:
+        if self._status == self.codes[200]:
             response_tmpl += 'Content-Length: {length}{ENDL}' \
                              'Content-Type: {type}{ENDL}{ENDL}'
         # response_tmpl += self._data.decode('utf-8')
@@ -63,8 +63,8 @@ class Response:
 
     @property
     def header(self):
-        if self._status not in self.codes:
-            return None
+        # if self._status not in self.codes.items():
+        #     return None
         tmpl = self._response_tml()
         # print(self.__dict__)
         return tmpl.format(status=self._status, server=self.server,
