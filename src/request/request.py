@@ -1,5 +1,5 @@
 ENDL = '\r\n'
-
+from urllib.request import quote, unquote
 
 class Request:
     allowed_methods = ["GET", "HEAD"]
@@ -19,13 +19,15 @@ class Request:
             self._method = None
             self._uri = None
             self._protocol = None
+        if self._uri is not None:
+            self._uri = unquote(self._uri)
 
     def __str__(self):
         return str(self.__dict__)
 
     @property
     def is_valid(self):
-        if self._method in self.allowed_methods and self._uri:
+        if self._method and self._uri:
             return True
         return False
 

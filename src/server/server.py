@@ -71,11 +71,18 @@ class Server:
             with open(filename, 'rb') as f:
                 yield
                 chunk = f.read(STEP)
+                # if b'<body>' in chunk:
+                #     chunk = chunk.split(b'<body>')[0] + b'\r\n\r\n'
                 yield chunk
+                # while b'<body>' not in chunk and chunk:
+                #     chunk = f.read(STEP)
+                #     if b'<body>' in chunk:
+                #         chunk = chunk.split(b'<body>')[0] + b'\r\n\r\n'
+                #     yield chunk
                 while chunk:
                     chunk = f.read(STEP)
                     yield chunk
-        print(f"IN READ FILE {filename}")
+
         raise StopIteration
 
 
@@ -100,7 +107,6 @@ class Server:
         else:
             file_type = 'default'
         file_size = 0
-        print(f"FILE TYPE {file_type}")
         try:
             file_size = getsize(filepath)
             status = 200
@@ -110,6 +116,8 @@ class Server:
                 status = 403
         if self._static_dir not in abspath(filepath):
             status = 403
+        if method not in self._allowed_methods:
+            status = 405
         return Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)
 
     @coro
@@ -145,8 +153,9 @@ class Server:
             con.close()
             raise StopIteration
         resp = self._handle_request(req)
+        print(f'req {req}')
+        print(f"send resp: {resp.header} [{resp.filename}]")
         con.send(resp.header)
-        print(f"send resp: {resp.filename}")
         if resp._status != 200:
             epoll.unregister(con.fileno())
             con.close()
@@ -155,11 +164,16 @@ class Server:
         while True:
             try:
                 chunk = next(rf)
+                if req.method == "HEAD":
+                    print("WTF")
+                    if b'<body>' in chunk:
+                        chunk = chunk.split(b'<body>')[0] + b'\r\n\r\n'
+                        print(f'SLPIT CHUNCK >>>> {chunk}')
+                        rf.close()
             except StopIteration:
                 break
             except FileNotFoundError:
                 break
-            print(f'sending {chunk} [{con.fileno()}]')
             try:
                 con.send(chunk)
             except BrokenPipeError:
