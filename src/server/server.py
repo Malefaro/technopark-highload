@@ -215,12 +215,12 @@ class Server:
         # print("starting server at {}:{}".format(self._host, self._port))
         # epoll = self.epoll
         server = self.server
-        epoll = select.epoll()
+        epoll = select.epoll(-1)
         epoll.register(server.fileno(), select.EPOLLIN)
         server_fd = server.fileno()
         try:
             while True:
-                events = epoll.poll(0.1)
+                events = epoll.poll()
                 # print(f"some events : {events}")
                 for fileno, event in events:
                     if fileno == server_fd:
