@@ -1,3 +1,5 @@
 venv/
 .idea/
 test.py
+.DS_Store
+http-test-suite/.git

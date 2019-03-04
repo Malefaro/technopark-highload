@@ -6,7 +6,7 @@ services:
       context: ./
       dockerfile: Dockerfile
     volumes:
-      - ../http-test-suite:/var/www/html
+      - ./http-test-suite:/var/www/html
       - ./httpd.conf:/etc/httpd.conf
     expose:
       - "80"

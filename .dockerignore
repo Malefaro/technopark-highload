@@ -3,3 +3,4 @@
 .gitignore
 README.md
 venv/
+http-test-suite/.git

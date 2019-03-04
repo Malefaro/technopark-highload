@@ -131,13 +131,13 @@ class Server:
             status = 403
         if method not in self._allowed_methods:
             status = 405
-        print(f'check response {Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)}')
+        #print(f'check response {Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)}')
         return Response(status=status, content_length=file_size, f_type=file_type, filename=filepath)
 
     @coro
     def read_request(self, new_con, epoll):
         con = new_con
-        print(f'creating new con {con}')
+        #print(f'creating new con {con}')
         msg = b''
         yield
         while True:
@@ -153,7 +153,7 @@ class Server:
                 msg += data
             else:
                 req = Request(msg.decode('utf-8'))
-                print(f"msg: {msg} in con: {con.fileno()}\nreq: {req}")
+                #print(f"msg: {msg} in con: {con.fileno()}\nreq: {req}")
                 epoll.modify(con.fileno(), select.EPOLLOUT)
                 new_task = self.send_response(con, epoll, req)
                 self._tasks[con.fileno()] = new_task
@@ -167,9 +167,10 @@ class Server:
             con.close()
             raise StopIteration
         resp = self._handle_request(req)
-        print(f'req {req}')
-        print(f"send resp: {resp.header} [{resp.filename}]")
+        #print(f'req {req}')
+        #print(f"send resp: {resp.header} [{resp.filename}]")
         con.send(resp.header)
+        #print(f'[{os.getpid()}] Send {resp.header}')
         if resp._status != resp.codes[200]:
             epoll.unregister(con.fileno())
             con.close()
@@ -223,7 +224,10 @@ class Server:
                 # print(f"some events : {events}")
                 for fileno, event in events:
                     if fileno == server_fd:
-                        con, _ = server.accept()
+                        try:
+                            con, _ = server.accept()
+                        except BlockingIOError:
+                            continue
                         con.setblocking(0)
                         epoll.register(con.fileno(), select.EPOLLIN)
                         # task = self.add_connection(con)
