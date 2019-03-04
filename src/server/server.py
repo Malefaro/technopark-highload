@@ -65,6 +65,19 @@ class Server:
         self._allowed_methods = allowed_methods
         self._tasks = {}
 
+        server = socket.socket(*self._socket_opts)
+        # epoll = select.epoll()
+        # epoll.register(server.fileno(), select.EPOLLIN)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((self._host, self._port))
+        server.listen(5)
+        server.setblocking(0)
+        server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        server_fd = server.fileno()
+        self.server = server
+        # self.epoll = epoll
+        print("starting server at {}:{}".format(self._host, self._port))
+
     @coro
     def _read_file(self, filename):
         if os.path.exists(filename):
@@ -186,18 +199,24 @@ class Server:
         con.close()
         raise StopIteration
 
+
     @coro
     def start(self):
-        server = socket.socket(*self._socket_opts)
+        # server = socket.socket(*self._socket_opts)
+        # epoll = select.epoll()
+        # epoll.register(server.fileno(), select.EPOLLIN)
+        # server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # server.bind((self._host, self._port))
+        # server.listen(5)
+        # server.setblocking(0)
+        # server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        # server_fd = server.fileno()
+        # print("starting server at {}:{}".format(self._host, self._port))
+        # epoll = self.epoll
+        server = self.server
         epoll = select.epoll()
         epoll.register(server.fileno(), select.EPOLLIN)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((self._host, self._port))
-        server.listen(5)
-        server.setblocking(0)
-        server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         server_fd = server.fileno()
-        print("starting server at {}:{}".format(self._host, self._port))
         try:
             while True:
                 events = epoll.poll(0.1)
